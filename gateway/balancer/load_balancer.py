@@ -45,8 +45,6 @@ class ConsistentHashRing:
     - To route a key, hash it and walk clockwise to the nearest node
     - Adding/removing a backend only remaps ~1/N of keys (minimal disruption)
 
-    Time Complexity: O(log n) per lookup via bisect, O(n * replicas) to build
-    Space Complexity: O(n * replicas) for the ring
     """
 
     def __init__(self, replicas: int = 150):
