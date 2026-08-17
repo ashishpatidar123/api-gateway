@@ -44,7 +44,6 @@ class ConsistentHashRing:
     - Node position = MD5("backend_url:replica_index") mod 2^32
     - To route a key, hash it and walk clockwise to the nearest node
     - Adding/removing a backend only remaps ~1/N of keys (minimal disruption)
-
     """
 
     def __init__(self, replicas: int = 150):
