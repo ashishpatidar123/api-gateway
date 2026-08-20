@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./gateway:/app/gateway
+      - ./dashboard:/app/dashboard
+    environment:
+      - PYTHONUNBUFFERED=1

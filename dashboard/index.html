@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Gateway Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="toast-container" id="toasts"></div>
+
+    <div class="app-layout">
+        <!-- ==================== Sidebar ==================== -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <h1>API Gateway</h1>
+                <div class="brand-sub">Control Center</div>
+            </div>
+            <div class="sidebar-status">
+                <span class="status-dot disconnected" id="statusDot"></span>
+                <span id="statusText">Connecting...</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Monitoring</div>
+                <div class="nav-item active" onclick="switchTab('overview')">
+                    <span class="nav-icon">&#9678;</span> Overview
+                </div>
+                <div class="nav-item" onclick="switchTab('topology')">
+                    <span class="nav-icon">&#9670;</span> Topology
+                </div>
+                <div class="nav-item" onclick="switchTab('reqlog')">
+                    <span class="nav-icon">&#9776;</span> Request Log
+                </div>
+                <div class="nav-section-label">Traffic Control</div>
+                <div class="nav-item" onclick="switchTab('ratelimit')">
+                    <span class="nav-icon">&#9201;</span> Rate Limiter
+                </div>
+                <div class="nav-item" onclick="switchTab('cache')">
+                    <span class="nav-icon">&#9881;</span> Cache
+                </div>
+                <div class="nav-item" onclick="switchTab('bloom')">
+                    <span class="nav-icon">&#128737;</span> IP Blocklist
+                </div>
+                <div class="nav-section-label">Reliability</div>
+                <div class="nav-item" onclick="switchTab('circuitbreaker')">
+                    <span class="nav-icon">&#9889;</span> Circuit Breaker
+                </div>
+                <div class="nav-item" onclick="switchTab('health')">
+                    <span class="nav-icon">&#9829;</span> Health
+                </div>
+                <div class="nav-section-label">Configuration</div>
+                <div class="nav-item" onclick="switchTab('routes')">
+                    <span class="nav-icon">&#9784;</span> Routes
+                </div>
+                <div class="nav-item" onclick="switchTab('tools')">
+                    <span class="nav-icon">&#9874;</span> Tools
+                </div>
+            </nav>
+            <div class="sidebar-footer" id="lastUpdate">
+                Waiting for data...
+            </div>
+        </aside>
+
+        <!-- ==================== Main Content ==================== -->
+        <main class="main-content">
+            <div class="topbar">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+                    <span class="topbar-title" id="pageTitle">Overview</span>
+                </div>
+                <div class="topbar-right">
+                    <div class="sim-toggle-wrap" id="simToggleWrap">
+                        <span class="sim-status-dot" id="simStatusDot"></span>
+                        <span class="sim-label" id="simLabel">Simulator</span>
+                        <button class="sim-toggle-btn" id="simToggleBtn" onclick="toggleSimulator()">
+                            <span class="sim-toggle-knob" id="simToggleKnob"></span>
+                        </button>
+                        <span class="sim-stats-mini" id="simStatsMini"></span>
+                    </div>
+                    <span id="topbarTime"></span>
+                </div>
+            </div>
+
+            <div class="container">
+                <!-- Stat Cards -->
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="label">Requests</div>
+                        <div class="value" id="statTotal">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">RPS</div>
+                        <div class="value" id="statRps" style="color:var(--primary)">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">P50 Latency</div>
+                        <div class="value" id="statP50" style="color:var(--success)">0<span style="font-size:14px">ms</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">P99 Latency</div>
+                        <div class="value" id="statP99" style="color:var(--warning)">0<span style="font-size:14px">ms</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Error Rate</div>
+                        <div class="value" id="statErrorRate" style="color:var(--danger)">0<span style="font-size:14px">%</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">Cache Hit Rate</div>
+                        <div class="value" id="statCacheHit" style="color:var(--info)">0<span style="font-size:14px">%</span></div>
+                    </div>
+                </div>
+
+                <!-- ==================== Overview Tab ==================== -->
+                <div class="tab-content active" id="tab-overview">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">Latency Distribution</div>
+                            <div class="panel-body">
+                                <div class="lat-row">
+                                    <span class="lat-label">P50</span>
+                                    <div class="lat-bar-track"><div class="lat-bar-fill" id="latP50" style="width:0;background:var(--success)"></div></div>
+                                    <span class="lat-val" id="latP50Val">0ms</span>
+                                </div>
+                                <div class="lat-row">
+                                    <span class="lat-label">P95</span>
+                                    <div class="lat-bar-track"><div class="lat-bar-fill" id="latP95" style="width:0;background:var(--warning)"></div></div>
+                                    <span class="lat-val" id="latP95Val">0ms</span>
+                                </div>
+                                <div class="lat-row">
+                                    <span class="lat-label">P99</span>
+                                    <div class="lat-bar-track"><div class="lat-bar-fill" id="latP99" style="width:0;background:var(--danger)"></div></div>
+                                    <span class="lat-val" id="latP99Val">0ms</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Status Codes</div>
+                            <div class="panel-body">
+                                <div class="chart-box"><canvas id="statusChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Traffic Heatmap -->
+                    <div class="panel" style="margin-bottom:16px">
+                        <div class="panel-header">Traffic Heatmap (requests per route per minute)</div>
+                        <div class="panel-body" id="heatmapPanel">
+                            <div style="color:var(--muted);font-size:12px">Collecting traffic data...</div>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">
+                                Load Balancer
+                                <select class="input" id="lbStrategy" onchange="changeLbStrategy()" style="width:auto">
+                                    <option value="round_robin">Round Robin</option>
+                                    <option value="weighted" selected>Weighted</option>
+                                    <option value="least_connections">Least Connections</option>
+                                    <option value="consistent_hash">Consistent Hash</option>
+                                </select>
+                            </div>
+                            <div class="panel-body" id="backendsPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Topology Tab (VIZ 1: Network Topology) ==================== -->
+                <div class="tab-content" id="tab-topology">
+                    <div class="panel">
+                        <div class="panel-header">Network Topology - Live Request Flow</div>
+                        <div class="panel-body">
+                            <svg id="topologySvg" class="topology-svg" viewBox="0 0 700 260" preserveAspectRatio="xMidYMid meet"></svg>
+                            <div style="font-size:10px;color:var(--muted);margin-top:8px;text-align:center">Animated packets show requests flowing through the middleware pipeline to backends</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Rate Limiter Tab ==================== -->
+                <div class="tab-content" id="tab-ratelimit">
+                    <div class="panel">
+                        <div class="panel-header">
+                            Rate Limiter
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <select class="input" id="rlStrategy" onchange="changeRlStrategy()" style="width:auto">
+                                    <option value="token_bucket">Token Bucket</option>
+                                    <option value="sliding_window_log">Sliding Window Log</option>
+                                    <option value="sliding_window_counter">Sliding Window Counter</option>
+                                </select>
+                                <span id="rlStats" style="font-size:11px;color:var(--muted)"></span>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="rlAlgoInfo" style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:11px;color:var(--muted)"></div>
+                            <div id="bucketsPanel">
+                                <div style="color:var(--muted);font-size:12px">No clients yet</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Cache Tab ==================== -->
+                <div class="tab-content" id="tab-cache">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">
+                                Cache Stats
+                                <button class="btn btn-danger btn-sm" onclick="clearCache()">Clear Cache</button>
+                            </div>
+                            <div class="panel-body" id="cacheStatsPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Hit/Miss Ratio</div>
+                            <div class="panel-body">
+                                <div class="chart-box"><canvas id="cacheChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== IP Blocklist Tab (Bloom Filter + CIDR Trie) ==================== -->
+                <div class="tab-content" id="tab-bloom">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">
+                                Bloom Filter (Exact IPs)
+                                <div style="display:flex;gap:6px">
+                                    <input class="input" id="blockIpInput" placeholder="IP address" style="width:120px">
+                                    <button class="btn btn-danger btn-sm" onclick="blockIp()">Block</button>
+                                </div>
+                            </div>
+                            <div class="panel-body" id="bloomPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                CIDR Trie (Prefix Ranges)
+                                <div style="display:flex;gap:6px">
+                                    <input class="input" id="cidrInput" placeholder="e.g. 10.0.0.0/8" style="width:130px">
+                                    <button class="btn btn-danger btn-sm" onclick="blockCidr()">Block</button>
+                                </div>
+                            </div>
+                            <div class="panel-body" id="cidrPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel" style="margin-top:12px">
+                        <div class="panel-header">
+                            IP Checker
+                            <div style="display:flex;gap:6px">
+                                <input class="input" id="checkIpInput" placeholder="Check any IP" style="width:140px">
+                                <button class="btn btn-primary btn-sm" onclick="checkIp()">Check Bloom</button>
+                                <button class="btn btn-primary btn-sm" style="background:var(--purple)" onclick="checkCidr()">Check CIDR</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Request Log Tab (VIZ 6: Terminal Log) ==================== -->
+                <div class="tab-content" id="tab-reqlog">
+                    <div class="panel">
+                        <div class="panel-header">
+                            Request Log (Ring Buffer)
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <span id="termStats" style="font-size:11px;color:var(--muted)"></span>
+                                <button class="btn btn-danger btn-sm" onclick="clearRequestLog()">Clear</button>
+                            </div>
+                        </div>
+                        <div class="terminal">
+                            <div class="terminal-header">
+                                <div class="terminal-dots">
+                                    <span style="background:#ef4444"></span>
+                                    <span style="background:#f59e0b"></span>
+                                    <span style="background:#22c55e"></span>
+                                </div>
+                                <span class="terminal-title">gateway.log</span>
+                                <div class="terminal-controls">
+                                    <input class="terminal-filter" placeholder="grep filter..." oninput="handleTerminalFilter(event)">
+                                    <button class="btn btn-sm btn-primary" id="autoScrollBtn" onclick="toggleAutoScroll()" style="font-size:10px">Auto</button>
+                                </div>
+                            </div>
+                            <div class="terminal-body" id="terminalBody">
+                                <div class="terminal-line"><span class="dim">Waiting for requests...</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Routes Tab (VIZ 7: Trie Tree) ==================== -->
+                <div class="tab-content" id="tab-routes">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">Registered Routes</div>
+                            <div class="panel-body" style="padding:0;overflow-x:auto" id="routesPanel">
+                                <div style="padding:16px;color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">URL Trie Structure</div>
+                            <div class="panel-body" id="triePanel" style="font-size:12px;overflow-x:auto">
+                                <div style="color:var(--muted);font-size:12px">Click "Routes" tab to load trie...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Circuit Breaker Tab (VIZ 3: State Machine) ==================== -->
+                <div class="tab-content" id="tab-circuitbreaker">
+                    <!-- State Machine Visualization -->
+                    <div class="panel" style="margin-bottom:16px">
+                        <div class="panel-header">Circuit Breaker State Machine</div>
+                        <div class="panel-body">
+                            <svg id="cbFsmSvg" class="cb-fsm-svg" viewBox="0 0 500 200" preserveAspectRatio="xMidYMid meet"></svg>
+                            <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:4px">Click CLOSED state to reset all breakers</div>
+                        </div>
+                    </div>
+                    <!-- Breaker Cards -->
+                    <div class="panel">
+                        <div class="panel-header">
+                            Circuit Breakers
+                            <div style="display:flex;gap:8px;align-items:center">
+                                <span id="cbSummary" style="font-size:11px;color:var(--muted)"></span>
+                                <button class="btn btn-danger btn-sm" onclick="resetAllBreakers()">Reset All</button>
+                            </div>
+                        </div>
+                        <div class="panel-body">
+                            <div id="cbPanel">
+                                <div style="color:var(--muted);font-size:12px">No circuit breakers registered</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Health Tab ==================== -->
+                <div class="tab-content" id="tab-health">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">Active Health Checker</div>
+                            <div class="panel-body" id="healthCheckerPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Retry Policy</div>
+                            <div class="panel-body" id="retryPanel">
+                                <div style="color:var(--muted);font-size:12px">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel" style="margin-top:12px">
+                        <div class="panel-header">Request/Response Transformer</div>
+                        <div class="panel-body" id="transformerPanel">
+                            <div style="color:var(--muted);font-size:12px">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== Tools Tab (VIZ 5: Waterfall) ==================== -->
+                <div class="tab-content" id="tab-tools">
+                    <div class="grid-2">
+                        <div class="panel">
+                            <div class="panel-header">Authentication</div>
+                            <div class="panel-body">
+                                <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">JWT Token</div>
+                                <div style="display:flex;gap:8px;margin-bottom:10px">
+                                    <input class="input" id="tokenClientId" placeholder="Client ID" value="test-user" style="flex:1">
+                                    <select class="input" id="tokenRole">
+                                        <option value="admin">admin</option>
+                                        <option value="user" selected>user</option>
+                                        <option value="viewer">viewer</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="generateToken()">Generate</button>
+                                </div>
+                                <div id="tokenResult" style="font-size:11px;font-family:monospace;word-break:break-all;color:var(--muted);max-height:60px;overflow-y:auto;margin-bottom:12px"></div>
+                                <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+                                    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600">API Key</div>
+                                    <div style="display:flex;gap:8px;margin-bottom:8px">
+                                        <input class="input" id="apiKeyClientId" placeholder="Client ID" value="api-client" style="flex:1">
+                                        <select class="input" id="apiKeyRole">
+                                            <option value="admin">admin</option>
+                                            <option value="user" selected>user</option>
+                                            <option value="viewer">viewer</option>
+                                        </select>
+                                        <button class="btn btn-primary" onclick="generateApiKey()">Generate</button>
+                                    </div>
+                                    <div id="apiKeyResult" style="font-size:11px;font-family:monospace;word-break:break-all;color:var(--muted);max-height:60px;overflow-y:auto;margin-bottom:8px"></div>
+                                    <div id="apiKeysList" style="font-size:11px;color:var(--muted)"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">Send Test Request</div>
+                            <div class="panel-body">
+                                <div style="display:flex;gap:8px;margin-bottom:10px">
+                                    <select class="input" id="testMethod">
+                                        <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+                                    </select>
+                                    <input class="input" id="testPath" placeholder="/api/v1/products" value="/api/v1/products" style="flex:1">
+                                    <button class="btn btn-primary" onclick="sendTestRequest()">Send</button>
+                                </div>
+                                <div style="display:flex;gap:8px;margin-bottom:10px">
+                                    <input class="input" id="testToken" placeholder="Bearer token (optional)" style="flex:1">
+                                    <input class="input" id="testApiKey" placeholder="API key (optional)" style="flex:1">
+                                </div>
+                                <pre id="testResult" style="font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto;background:var(--bg);padding:10px;border-radius:6px"></pre>
+                                <!-- Waterfall Timeline -->
+                                <div id="waterfallPanel"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js?v=2"></script>
+</body>
+</html>

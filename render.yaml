@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: api-gateway
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile
+    dockerContext:
+    envVars:
+      - key: USE_MOCK_BACKENDS
+        value: "false"
+      - key: ENABLE_TRAFFIC_SIM
+        value: "true"
+    healthCheckPath: /api/v1/health
