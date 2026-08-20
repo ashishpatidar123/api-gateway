@@ -43,7 +43,7 @@ class SlidingWindowLogRateLimiter:
         }
 
 
-    def allow_request(self, client_id:str, capacity: int = None) -> bool: # type: ignore
+    def allow_request(self, client_id:str, capacity: int = None, refill_rate: float = None) -> bool: # type: ignore
 
         # check if a request from client should be allowed or not,
         # removes expired timestamps, then checks count against capacity

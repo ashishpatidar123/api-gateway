@@ -6,3 +6,6 @@ mmh3==4.1.0
 pydantic==2.7.4
 websockets==12.0
 redis==5.0.7
+numpy
+sympy
+torch

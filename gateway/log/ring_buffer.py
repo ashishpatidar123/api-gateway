@@ -13,6 +13,7 @@ class RequestLogEntry:
     path:str
     status_code:int
     latency_ms: float
+    client_ip:str
     pipeline_step: str
     cached: bool = False
     backend: Optional[str] = None

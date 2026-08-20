@@ -8,8 +8,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Optional, Any
 
-from numpy import emath
-from sympy import Order
 
 @dataclass
 class CacheEntry:
