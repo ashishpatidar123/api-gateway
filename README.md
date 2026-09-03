@@ -28,36 +28,36 @@ Requests are proxied to real backends via httpx with retry logic. A live WebSock
 
 ## Architecture
 
-```text
-Client Request --[X-Request-ID]-->
-    |
-    v
-+-------------------------------------------------------------+
-|               MIDDLEWARE CHAIN (CoR Pattern)                |
-|                                                             |
-| Bloom Filter -> CIDR Trie -> Rate Limiter                   |
-| (IP blocklist)  (range ban)  (per-route + per-IP)           |
-|    |               |               |                        |
-|    v               v               v                        |
-| Trie Router  -> JWT / API Key  -> Transformer               |
-| (URL match)     (dual auth)       (header rewrite)          |
-|    |               |               |                        |
-|    v               v               v                        |
-| LRU Cache    -> Load Balancer  -> Circuit Breaker           |
-| (TTL evict)     (4 strategies)    (fault isolation)         |
-|    |               |               |                        |
-|    v               v               v                        |
-| Retry Policy -> HTTP Proxy (httpx) -> Ring Buffer           |
-| (exp backoff)   (real proxying)       (req log)             |
-+-------------------------------------------------------------+
-    |
-    v
-  Backend Services (real via httpx / mock for demo)
-    ^
-    |
-  Health Checker (background probing every 10s)
-```
+## Architecture
 
+```mermaid
+flowchart TD
+    Client([Client Request]) -->|X-Request-ID| Gateway
+
+    subgraph Gateway [API Gateway: Chain of Responsibility]
+        direction TB
+        BF[Bloom Filter <br> IP Blocklist] --> CIDR[CIDR Trie <br> Range Ban]
+        CIDR --> RL[Rate Limiter <br> Per-route + IP]
+        RL --> Router[Trie Router <br> URL Match]
+        Router --> Auth[Auth <br> JWT / API Key]
+        Auth --> Trans[Transformer <br> Request Rewrite]
+        Trans --> Cache[LRU Cache <br> TTL Evict]
+        Cache --> LB[Load Balancer <br> 4 Strategies]
+        LB --> CB[Circuit Breaker <br> Fault Isolation]
+        CB --> Retry[Retry Policy <br> Exp Backoff]
+        Retry --> Proxy[HTTP Proxy <br> httpx]
+        Proxy -.-> RB[Ring Buffer <br> Request Log]
+    end
+
+    Proxy -->|Forward Request| Backends[(Backend Services)]
+    Backends -->|Response| Proxy
+
+    HC((Health Checker)) -.->|Probes /health every 10s| Backends
+    HC -.->|Updates Status| LB
+    HC -.->|Updates Status| CB
+
+    Gateway -.->|WebSocket Broadcast| Dash[[Live Dashboard]]
+```
 ---
 
 ## Project Structure
@@ -108,6 +108,54 @@ api-gateway/
 ---
 
 ## Code Flow
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant FA as FastAPI
+    participant MW as Middleware Chain
+    participant Cache as LRU Cache
+    participant Proxy as Proxy Layer
+    participant BE as Backends
+    participant BG as Background/Telemetry
+
+    C->>FA: Incoming Request
+    FA->>FA: Shutdown check & Assign X-Request-ID
+    FA->>MW: MiddlewareChain.run()
+    
+    MW->>MW: Bloom Filter (Blocklist check)
+    MW->>MW: CIDR Trie (Range check)
+    MW->>MW: Trie Router (URL extraction)
+    MW->>MW: Rate Limiter (Per-route/IP limit)
+    MW->>MW: Auth (JWT/API Key validation)
+    
+    MW->>Cache: LRU Cache Lookup
+    alt Cache Hit
+        Cache-->>MW: Cached Response
+    else Cache Miss
+        MW->>MW: Load Balancer (Pick Backend)
+        MW->>MW: Circuit Breaker (Check State)
+        MW->>Proxy: Forward with Retry Policy
+        Proxy->>BE: httpx request
+        BE-->>Proxy: Response
+        Proxy-->>MW: Raw Response
+        MW->>MW: Transformer (Header/Body Mapping)
+        MW->>Cache: Store in Cache
+    end
+    
+    MW-->>FA: Pipeline Complete
+    FA-->>C: Deliver Final Response
+    
+    par Async Telemetry
+        FA->>BG: Log to Ring Buffer
+        FA->>BG: Update MetricsCollector
+        BG->>BG: WebSocket Broadcast (Every 2s)
+    and Background Tasks
+        loop Every 10s
+            BG->>BE: Health Check Probe (/health)
+        end
+    end
+```
 
 ```text
  1. Request arrives       -> FastAPI catch-all route
